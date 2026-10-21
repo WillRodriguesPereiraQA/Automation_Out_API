@@ -33,12 +33,41 @@ function readJUnitStats() {
   };
 }
 
+function statusIcon(spec) {
+  const status =
+    spec.ok === true
+      ? 'passed'
+      : spec.ok === false
+        ? 'failed'
+        : (spec.tests?.[0]?.results?.at(-1)?.status ?? 'unknown');
+  if (status === 'passed') return '✅';
+  if (status === 'failed') return '❌';
+  if (status === 'skipped') return '⏭️';
+  return '⚠️';
+}
+
+function appendSuiteTree(suites, lines, prefix = '') {
+  for (const suite of suites ?? []) {
+    const title = [prefix, suite.title].filter(Boolean).join(' › ');
+    if (suite.specs?.length) {
+      lines.push(`- **${title}**`);
+      for (const spec of suite.specs) {
+        lines.push(`  - ${statusIcon(spec)} ${spec.title}`);
+      }
+    }
+    if (suite.suites?.length) {
+      appendSuiteTree(suite.suites, lines, title);
+    }
+  }
+}
+
 const stats = readJUnitStats();
 const report = readJsonResults();
 const target =
   process.env.REQRES_MOCK === '1'
     ? 'Local ReqRes mock (CI default)'
     : 'Live https://reqres.in/api';
+const suiteScope = process.env.API_SUITE === 'smoke' ? 'Smoke' : 'Full';
 
 const lines = [
   '## API Tests CI — execution report',
@@ -50,6 +79,7 @@ const lines = [
   `| Branch | ${process.env.GITHUB_REF_NAME ?? 'n/a'} |`,
   `| Commit | \`${(process.env.GITHUB_SHA ?? '').slice(0, 7)}\` |`,
   `| Target | ${target} |`,
+  `| Suite | ${suiteScope} |`,
   '',
 ];
 
@@ -70,15 +100,7 @@ if (stats) {
 
 if (report?.suites?.length) {
   lines.push('### Suites and scenarios', '');
-  for (const suite of report.suites) {
-    lines.push(`- **${suite.title}**`);
-    for (const spec of suite.specs ?? []) {
-      const status = spec.tests?.[0]?.results?.[0]?.status ?? 'unknown';
-      const icon =
-        status === 'passed' ? '✅' : status === 'failed' ? '❌' : '⚠️';
-      lines.push(`  - ${icon} ${spec.title}`);
-    }
-  }
+  appendSuiteTree(report.suites, lines);
   lines.push('');
 }
 
@@ -92,9 +114,9 @@ lines.push(
   '',
   '```bash',
   'npm ci',
-  'npm run test:ci        # uses REQRES_MOCK=1 when exported in CI',
-  'npm run test:api:mock  # explicit mock run',
-  'npm run test:api       # live reqres.in (requires API key / quota)',
+  'npm run check          # typecheck + lint',
+  'npm run test:api:mock  # full suite against the local mock',
+  'npm run test:api:smoke # representative smoke against live reqres.in',
   '```',
   ''
 );

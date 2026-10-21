@@ -15,11 +15,13 @@ Automation_Out/
 │   └── api-tests.yml          # Pipeline CI/CD (GitHub Actions)
 ├── tests/api/
 │   ├── api-fixtures.ts        # Contexto HTTP, .env, credenciais ReqRes
+│   ├── contracts/
+│   │   └── reqres-schemas.ts  # Schemas Zod do contrato público
 │   ├── helpers/
 │   │   └── response-assertions.ts
 │   ├── mock/
-│   │   └── reqres-mock-server.ts   # Mock local (mesmo contrato da API)
-│   ├── auth.spec.ts           # Login e register
+│   │   └── reqres-mock-server.ts   # Mock local alinhado à API pública
+│   ├── auth.spec.ts           # Login e register (um teste por cenário)
 │   ├── users-get.spec.ts      # GET list / detail / 404
 │   ├── users-write.spec.ts    # POST, PUT, DELETE
 │   ├── validation-negative.spec.ts
@@ -35,7 +37,7 @@ Automation_Out/
 └── .env.example
 ```
 
-**Fluxo resumido:** os specs usam a fixture `apiContext` → chamadas HTTP à ReqRes (ou ao mock em CI/offline) → asserções reutilizáveis em `response-assertions.ts`.
+**Fluxo resumido:** cada cenário é um teste Playwright independente. Os specs usam a fixture `apiContext` → chamadas HTTP à ReqRes (ou ao mock em CI/offline) → status, headers e schema Zod em `response-assertions.ts`.
 
 ---
 
@@ -47,6 +49,8 @@ Automation_Out/
 | npm | 10+ |
 | @playwright/test | ^1.48.0 |
 | TypeScript | ^5.5.0 |
+| Zod | ^3.25 |
+| ESLint | ^10 |
 
 ---
 
@@ -81,7 +85,7 @@ Edite o `.env` se precisar de outra URL, credenciais de login ou `REQRES_API_KEY
 
 ### Mock local (recomendado no dia a dia)
 
-Evita limite de requisições da ReqRes e funciona offline. O contrato dos endpoints é o mesmo da API real.
+Evita limite de requisições da ReqRes e funciona offline. O mock repete o contrato público observado na API: página com 6 usuários e `avatar`, página fora do intervalo com `data` vazio, login de um usuário da base com qualquer senha não vazia, e os erros `user not found`, `Missing password`, `Missing email or username` e `invalid_json`.
 
 ```bash
 npm run test:api:mock
@@ -89,11 +93,27 @@ npm run test:api:mock
 
 ### API ReqRes ao vivo
 
+A suíte completa:
+
 ```bash
 npm run test:api
 ```
 
+Smoke representativo (leitura, login, um negativo de autenticação, register e ciclo de escrita). Use quando a API estiver disponível — o demo anônimo tem cota diária baixa por IP:
+
+```bash
+npm run test:api:smoke
+```
+
 Use credenciais válidas no `.env`. A ReqRes pode exigir header `x-api-key` e impõe limites diários por IP — se falhar com **429**, use o mock ou aguarde o reset do limite.
+
+### Qualidade do código de automação
+
+```bash
+npm run check
+```
+
+Roda `typecheck` (`tsc --noEmit`) e `lint` (ESLint). O CI executa os dois antes da suíte.
 
 ### Comando usado no CI
 
@@ -140,10 +160,11 @@ Em modo **CI** (`CI=true`), são gerados ainda:
 ### O que o pipeline faz
 
 1. `npm ci`
-2. `npm run test:ci` com **`REQRES_MOCK=1`** (padrão — estável no GitHub)
-3. Publica resultados JUnit no check **ReqRes API Tests**
-4. Gera **Summary** da run (run, branch, commit, suites)
-5. Salva **artifacts** por 30 dias:
+2. `npm run typecheck` e `npm run lint`
+3. Suíte completa contra o **mock** (`REQRES_MOCK=1`), ou a suíte **smoke** contra a API real no disparo manual com target `live`
+4. Publica resultados JUnit no check **ReqRes API Tests** — cada cenário é um teste separado
+5. Gera **Summary** da run (run, branch, commit, suites)
+6. Salva **artifacts** por 30 dias:
    - `playwright-report-<número>` — HTML
    - `api-test-results-<número>` — JUnit + JSON
 
@@ -159,7 +180,7 @@ Em modo **CI** (`CI=true`), são gerados ainda:
 
 1. No repositório: **Settings → Secrets and variables → Actions**
 2. Crie o secret `REQRES_API_KEY` com sua chave da ReqRes
-3. **Actions → API Tests CI → Run workflow** → target **live**
+3. **Actions → API Tests CI → Run workflow** → target **live** (executa só os testes `@smoke`)
 
 ---
 
@@ -168,9 +189,13 @@ Em modo **CI** (`CI=true`), são gerados ainda:
 | Script | Descrição |
 |--------|-----------|
 | `npm test` | Todos os testes Playwright |
-| `npm run test:api` | Suíte API contra ReqRes live |
-| `npm run test:api:mock` | Suíte API contra mock local |
-| `npm run test:ci` | Comando do pipeline (use com `REQRES_MOCK=1` no CI) |
+| `npm run test:api` | Suíte API completa contra ReqRes live |
+| `npm run test:api:mock` | Suíte API completa contra mock local |
+| `npm run test:api:smoke` | Smoke (`@smoke`) contra o alvo atual (live, ou mock se `REQRES_MOCK=1`) |
+| `npm run test:ci` | Suíte completa usada pelo pipeline com mock |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` | ESLint |
+| `npm run check` | Typecheck e lint |
 | `npm run report` | Abre o relatório HTML |
 | `npm run install:browsers` | Só necessário se no futuro houver testes de UI |
 

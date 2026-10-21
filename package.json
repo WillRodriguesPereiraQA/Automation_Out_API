@@ -6,12 +6,22 @@
     "test": "playwright test",
     "test:api": "playwright test tests/api",
     "test:api:mock": "node scripts/run-mock-tests.mjs",
+    "test:api:smoke": "playwright test tests/api --grep @smoke",
     "test:ci": "playwright test tests/api",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "check": "npm run typecheck && npm run lint",
     "report": "playwright show-report playwright-report",
     "install:browsers": "playwright install"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.48.0",
-    "typescript": "^5.5.0"
+    "@types/node": "^20.19.43",
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0",
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.72.0",
+    "zod": "^3.25.76"
   }
 }

@@ -4,7 +4,7 @@ import { resolve } from 'path';
 
 type ApiFixtures = {
   apiContext: APIRequestContext;
-  /** Serializes requests to reduce reqres.in rate limiting (429). */
+  /** Spaces live requests so the anonymous ReqRes quota is less likely to 429. */
   _throttle: void;
 };
 
@@ -35,11 +35,16 @@ async function withRateLimitRetry<T extends { status: () => number }>(
 function wrapWithRetry(raw: APIRequestContext): APIRequestContext {
   return {
     ...raw,
-    get: (url, options) => withRateLimitRetry(() => raw.get(url, options)),
-    post: (url, options) => withRateLimitRetry(() => raw.post(url, options)),
-    put: (url, options) => withRateLimitRetry(() => raw.put(url, options)),
-    delete: (url, options) => withRateLimitRetry(() => raw.delete(url, options)),
-    fetch: (url, options) => withRateLimitRetry(() => raw.fetch(url, options)),
+    get: (...args: Parameters<APIRequestContext['get']>) =>
+      withRateLimitRetry(() => raw.get(...args)),
+    post: (...args: Parameters<APIRequestContext['post']>) =>
+      withRateLimitRetry(() => raw.post(...args)),
+    put: (...args: Parameters<APIRequestContext['put']>) =>
+      withRateLimitRetry(() => raw.put(...args)),
+    delete: (...args: Parameters<APIRequestContext['delete']>) =>
+      withRateLimitRetry(() => raw.delete(...args)),
+    fetch: (...args: Parameters<APIRequestContext['fetch']>) =>
+      withRateLimitRetry(() => raw.fetch(...args)),
   };
 }
 
@@ -69,7 +74,9 @@ export const REQRES_VALID_LOGIN = {
 export const test = base.extend<ApiFixtures>({
   _throttle: [
     async ({}, use) => {
-      await throttleRequests();
+      if (process.env.REQRES_MOCK !== '1') {
+        await throttleRequests();
+      }
       await use();
     },
     { auto: true },

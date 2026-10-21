@@ -35,7 +35,9 @@ jobs:
 
     env:
       # Mock server in CI avoids reqres.in IP rate limits and keeps runs deterministic.
+      # A manual run with target "live" executes the @smoke subset against the hosted API.
       REQRES_MOCK: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'live' && '0' || '1' }}
+      API_SUITE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'live' && 'smoke' || 'full' }}
       REQRES_API_KEY: ${{ secrets.REQRES_API_KEY }}
 
     steps:
@@ -51,8 +53,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Typecheck automation code
+        run: npm run typecheck
+
+      - name: Lint automation code
+        run: npm run lint
+
       - name: Run API test suite
-        run: npm run test:ci
+        run: npm run ${{ env.API_SUITE == 'smoke' && 'test:api:smoke' || 'test:ci' }}
 
       - name: Publish unit test results
         uses: EnricoMi/publish-unit-test-result-action@v2
@@ -72,6 +80,7 @@ jobs:
           GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           REQRES_MOCK: ${{ env.REQRES_MOCK }}
+          API_SUITE: ${{ env.API_SUITE }}
 
       - name: Upload Playwright HTML report
         uses: actions/upload-artifact@v4

@@ -1,32 +1,55 @@
 import { expect, test } from './api-fixtures';
 import {
-  expectJsonError,
-  expectJsonSuccess,
-} from './helpers/response-assertions';
-
-test.describe.configure({ mode: 'serial' });
+  emptyJsonSchema,
+  userListResponseSchema,
+  userResponseSchema,
+} from './contracts/reqres-schemas';
+import { expectJsonContract } from './helpers/response-assertions';
 
 test.describe('Users — GET endpoints', () => {
-  test('covers list, detail, and not-found responses', async ({ apiContext }) => {
-    await test.step('positive: list users with pagination metadata', async () => {
-      const response = await apiContext.get('users', { params: { page: 1 } });
-      const body = await expectJsonSuccess(response, 200);
-      expect(body.page).toBe(1);
-      expect(body.data[0]).toMatchObject({
-        id: expect.any(Number),
-        email: expect.stringContaining('@'),
-      });
-    });
+  test('lists users on the first page', { tag: '@smoke' }, async ({ apiContext }) => {
+    const response = await apiContext.get('users', { params: { page: 1 } });
+    const body = await expectJsonContract(response, 200, userListResponseSchema);
 
-    await test.step('positive: get existing user by id', async () => {
-      const response = await apiContext.get('users/2');
-      const body = await expectJsonSuccess(response, 200);
-      expect(body.data.id).toBe(2);
+    expect(body.page).toBe(1);
+    expect(body.per_page).toBe(6);
+    expect(body.total).toBe(12);
+    expect(body.total_pages).toBe(2);
+    expect(body.data).toHaveLength(body.per_page);
+    expect(body.data[0]).toMatchObject({
+      id: 1,
+      email: 'george.bluth@reqres.in',
+      first_name: 'George',
+      last_name: 'Bluth',
     });
+  });
 
-    await test.step('negative: get non-existent user returns 404', async () => {
-      const response = await apiContext.get('users/999');
-      expectJsonError(response, 404);
+  test('returns an empty page past the last page', async ({ apiContext }) => {
+    const response = await apiContext.get('users', { params: { page: 99 } });
+    const body = await expectJsonContract(response, 200, userListResponseSchema);
+
+    expect(body.page).toBe(99);
+    expect(body.total).toBe(12);
+    expect(body.total_pages).toBe(2);
+    expect(body.data).toEqual([]);
+  });
+
+  test('returns an existing user by id', { tag: '@smoke' }, async ({ apiContext }) => {
+    const response = await apiContext.get('users/2');
+    const body = await expectJsonContract(response, 200, userResponseSchema);
+
+    expect(body.data).toMatchObject({
+      id: 2,
+      email: 'janet.weaver@reqres.in',
+      first_name: 'Janet',
+      last_name: 'Weaver',
     });
+  });
+
+  test('returns 404 for a user that does not exist', { tag: '@smoke' }, async ({
+    apiContext,
+  }) => {
+    const response = await apiContext.get('users/999');
+    await expectJsonContract(response, 404, emptyJsonSchema);
   });
 });
